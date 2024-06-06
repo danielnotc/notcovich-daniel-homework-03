@@ -1,12 +1,15 @@
 ---
 title: "Daniel-Notcovich-homework-03"
-format:
-  html: 
-    toc: true # includes a table of contents in rendered html format
-    pdf:
-execute: # for all code chunks
-    warning: false # do not display warnings
-    message: false # do not display messages
+format: 
+  docx: 
+    toc: true # includes a table of contents in rendered HTML format
+execute: #for all code chunks
+  warning: false # do not display warnings
+  message: false # do not display messages
+editor: 
+  markdown: 
+    wrap: 72
+date: "6/6/2024"
 ---
 ## reading in packages
 
