@@ -1,0 +1,184 @@
+---
+title: "Daniel-Notcovich-homework-03"
+format:
+  html: 
+    toc: true # includes a table of contents in rendered html format
+    pdf:
+execute: # for all code chunks
+    warning: false # do not display warnings
+    message: false # do not display messages
+---
+## reading in packages
+
+```{r}
+# general use
+library(tidyverse)
+library(readxl)
+library(here)
+library(janitor)
+
+# visualizing pairs
+library(GGally)
+
+# model selection
+library(MuMIn)
+
+# model predictions
+library(ggeffects)
+
+# model tables
+library(gtsummary)
+library(flextable)
+library(modelsummary)
+
+Valliere_etal_EcoApps_Data <- read_excel("Valliere_etal_EcoApps_Data.xlsx")
+
+drought_exp <- read_xlsx("Valliere_etal_EcoApps_Data.xlsx")
+                         sheet = "First Harvest"
+
+# quick look at data 
+str(drought_exp)
+class(drought_exp)
+```
+
+## cleaning
+
+```{r}
+# cleaning
+drought_exp_clean <- drought_exp %>% 
+  clean_names() %>% # nicer column names
+  mutate(species_name = case_when( # adding column with species scientific names
+    species == "ENCCAL" ~ "Encelia californica", # bush sunflower
+    species == "ESCCAL" ~ "Eschscholzia californica", # California poppy
+    species == "PENCEN" ~ "Penstemon centranthifolius", # Scarlet bugler
+    species == "GRICAM" ~ "Grindelia camporum", # great valley gumweed
+    species == "SALLEU" ~ "Salvia leucophylla", # Purple sage
+    species == "STIPUL" ~ "Nasella pulchra", # Purple needlegrass
+    species == "LOTSCO" ~ "Acmispon glaber" # deerweed
+  )) %>% 
+  relocate(species_name, .after = species) %>% # moving species_name column after species
+  mutate(water_treatment = case_when( # adding column with full treatment names
+    water == "WW" ~ "Well watered",
+    water == "DS" ~ "Drought stressed"
+  )) %>% 
+  relocate(water_treatment, .after = water) # moving water_treatment column after water
+```
+
+## Problem 1. Multiple linear regression: model selection and construction
+a. Make a table or list of all the models from class and the last one you constructed on your own. Write a caption for your table.
+
+```{r}
+models <- data.frame(
+  Model_numbers = c("Model 0", "Model 1", "Model 2", "Model 3", "Model 4"),
+  Model = c("null model", "saturated model", "two predictors", "two predictors", "two predictors"),
+  Predictors = c("none", "SLA, water treatment, and species", "SLA and water treatment", "SLA and species", "water treatment and species")
+)
+
+modeldatatable <- flextable(models) %>% # create flextable
+set_header_labels(Model_numbers = "Model numbers", Model = "Model", Predictors = "Predictors") %>% # rename headers 
+  align(align = "center", part = "all") %>% # formatting 
+  autofit() %>%
+  theme_vanilla() %>%
+  bold(part = "header") #bold everything in the header
+
+```
+
+Table 1 showcases a set of five models for predicting plant species' total biomass. Each model is listed in a separate row, with columns indicating the model number, model description, and its predictors. The term 'SLA' stands for specific leaf area, which is calculated by dividing a leaf's surface area by its dry weight, representing the plant's life strategy (mm²/g)
+```{r}
+print(modeldatatable)
+```
+
+b. In this study, I explored how species type (categorical), water treatment (categorical), and specific leaf area (SLA, numeric) impact total biomass. To analyze these effects, I constructed five different models using these three predictors: a null model, a saturated model, and three models each containing two predictors. To determine the most effective model, I used the Akaike Information Criterion (AIC), which balances model fit and complexity. Among the five models, the combination of water treatment and species produced the lowest AIC value (AICc = -158.8), indicating it was the best predictor of biomass. I confirmed that the final model met the assumptions of linear regression by examining diagnostic plots for randomness, homoscedasticity, normality of residuals, and the absence of significant outliers.
+
+```{r}
+# model of total biomass as a function of water treatment and species
+model4 <- lm(total_g ~ species_name + water_treatment, # formula for model
+             data = drought_exp_clean) # data frame
+
+plot(model4) # printing plots for model 4
+
+```
+
+
+```{r}
+summary(model4) 
+model_preds <- ggpredict(model4, # create model predictions 
+                         terms = c("water_treatment", 
+                                   "species_name"))
+
+```
+
+c. Make a visualization of the model predictions with underlying data for your “best” model.
+```{r}
+# Creating a new data frame of model predictions for plotting
+model_preds_for_plotting <- model_preds %>%
+  rename(
+    water_treatment = x,
+    species_name = group
+  )
+
+ggplot() +
+  # Underlying data
+  geom_point(data = drought_exp_clean,
+             aes(x = water_treatment,
+                 y = total_g)) +
+  # Model prediction 95% CI ribbon
+  geom_ribbon(data = model_preds_for_plotting,
+              aes(x = species_name,
+                  y = predicted,
+                  ymin = conf.low,
+                  ymax = conf.high,
+                  fill = water_treatment),
+              alpha = 0.2) +
+  # Model prediction lines
+  geom_line(data = model_preds_for_plotting,
+            aes(x = species_name,
+                y = predicted,
+                color = water_treatment)) +
+  # Cleaner theme
+  theme_classic() +
+  # Creating different panels for species
+  facet_wrap(~species_name)
+
+
+```
+d. Caption for table 
+Visualization of plant biomass predictions across different water treatments and species. The points represent observed data, while the shaded ribbons indicate the 95% confidence intervals of model predictions. The lines show the predicted biomass values based on the model, with different colors representing different water treatments. Each panel corresponds to a different species, facilitating comparison across species and treatments
+
+e. Results
+
+The predictors, water treatment, and species best described the total biomass, as evidenced by the model with the lowest Akaike Information Criterion (AICc = -158.8). On average, biomass was lower for drought-stressed plants compared to well-watered plants, which aligns with biological expectations. Additionally, plant species with larger ranges tended to have larger biomasses. This variation highlights the significant differences in biomass responses among species under different water treatments.
+
+# Problem 2. Affective visualization
+a. For my personal data representing the amount of time I spend on my couch per day I wanted an artistic representation that shows the asthetic of what my data represents. In this case I want my data to show the randomness that my data represents, showing that I never have a consistent schedule of the amount of time I am at home. This is also fitting with representing how my ADHD brain works, having no consistent schedule, alawys having variability in my life. 
+b. 
+
+
+c. 
+
+
+
+
+d. My piece showcases the amount of time I spend on my couch per day, visualizing the randomness and inconsistency in my daily routine. I wanted an absract representation of my data to further the feeling of randomness that i think abstract artworks do very well. I chose to use DALE to create my digital representation of my data, integrating real data with watercolor textures and soft gradients. 
+
+# Problem 3. Statistical critique
+
+https://doi.org/10.1002/ece3.10845
+
+a. The authors employed the Temporal Beta Diversity Index (TBI) to investigate changes in species diversity over time within various watersheds. They used this index to quantify species gains and losses across different sites, determining whether diversity changes were statistically significant. Additionally, they applied Holm correction to adjust p-values for multiple comparisons, ensuring the robustness of their statistical findings.
+
+b. The authors effectively represented their statistical results through clear and logically positioned axes, with the x-axis showing species losses and the y-axis showing species gains. They included both summary statistics and underlying data, using different shapes and colors to differentiate between sites with more gains than losses and vice versa. The figure also clearly marked high TBI sites with asterisks, enhancing the interpretability of significant findings.
+
+c. The figure maintains a high data-to-ink ratio by using simple shapes and minimal text. Colors are used effectively to distinguish between watersheds without overwhelming the viewer. The inclusion of the centroid line and the 1-1 line provides a clear visual reference for interpreting the results, and the overall layout avoids unnecessary elements that could detract from the primary data.
+
+d. To improve the figure, I would suggest the following changes:
+
+Axis Labels and Titles: Enhance axis labels with more descriptive titles, such as "Species Losses (B)" and "Species Gains (C)," and include units if applicable. Adding a main title could also help viewers quickly understand the context of the figure.
+
+Legend Clarity: The legend could be expanded to provide more details on the symbols and colors used. For instance, explicitly stating what the asterisks represent within the legend can avoid confusion.
+
+Data Points: Increase the size of data points slightly for better visibility, especially for those with high TBI values. This change would ensure that significant points are easily identifiable even at a glance.
+
+
+
+
